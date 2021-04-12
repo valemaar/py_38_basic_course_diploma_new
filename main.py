@@ -1,4 +1,5 @@
 import json
+import sys
 
 import requests
 
@@ -20,9 +21,23 @@ class VkUser:
             'v': self.version
         }
 
+    def get_numbers_of_photo(self):
+        count_photo = input(f'Сколько фотографий Вы хотите скачать (по-умолчанию 5 штук)?\n')
+        try:
+            if count_photo == '':
+                count_photo = 5
+                print('Будет загружено 5 фотографий.')
+            elif int(count_photo) in range(1001):
+                count_photo = int(count_photo)
+        except:
+            print('Ошибка! Неверный ввод!')
+            sys.exit()
+        return count_photo
+
     def get_photos(self, count_photo='5'):
         photos_url = self.url + 'photos.get'
         user_id = input(f'Введите id пользователя социальной сети "ВКонтакте":\n')
+        count_photo = self.get_numbers_of_photo()
         photos_params = {
             'count': count_photo,
             'user_id': user_id,

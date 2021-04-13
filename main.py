@@ -45,10 +45,31 @@ class VkUser:
         vk_user_id = res.json()['response'][0]['id']
         return vk_user_id
 
+    def get_photos_info_to_json(self, source_json):
+        # метод сохраняет на жесткий диск json-файл,
+        # содержащий информацию о фото в требуемом по заданию виде
+        res = source_json
+        json_data_file = []
+        file_path = 'vk_photos.json'
+
+        # создаем на жестком диске json-файл с информацией о фото
+        with open(file_path, 'w') as f:
+
+            # итерируем фотографии
+            for photo in res:
+                temp_dict = {}
+                temp_dict['filename'] = photo['filename']
+                temp_dict['size'] = photo['size']
+                json_data_file.append(temp_dict)
+
+            json.dump(json_data_file, f, ensure_ascii=False, indent=2)
+
+        message = f'Информация о скачиваемых фото сохранена в файл "{file_path}"\n'
+        return print(message)
+
     def get_photos(self):
         # метод сохраняет в json-файл служебную информацию о фото, для последующего использования этой
-        # информации во время загрузки фото в Яндекс.Диск. Также другой json-файл сохраняется на жесткий диск
-        # и содержит информацию о фото в требуемом по заданию виде
+        # информации во время загрузки фото в Яндекс.Диск
         photos_url = self.url + 'photos.get'
         user_id = self.get_vk_user_id()
         count_photo = self.get_numbers_of_photo()
@@ -61,54 +82,46 @@ class VkUser:
         }
         res = requests.get(photos_url, params={**self.params, **photos_params})
         photos = res.json()['response']['items']
-
-        json_data_file = []
         json_data_upload_yadisc = []
 
         # итерируем фотографии
         for photo in photos:
+            sizes = photo['sizes']
+            max_size_list = list()
 
-            file_path = 'vk_photo.json'
+            # запоминаем кол-во лайков текущего фото
+            photo_likes = photo['likes']['count']
 
-            # создаем на жестком диске json-файл с информацией о фото
-            with open(file_path, 'w') as f:
-                sizes = photo['sizes']
-                max_size_list = list()
+            # запоминаем дату создания текущего фото (преобразуем дату/время из формата timestamp unix)
+            photo_date = datetime.fromtimestamp(int(photo['date'])).strftime('%Y.%m.%d_%H-%M-%S')
 
-                # запоминаем кол-во лайков текущего фото
-                photo_likes = photo['likes']['count']
+            # итерируем размеры фото внутри одной фотографии
+            for size in sizes:
+                if size['width'] >= size['height']:
+                    max_size_list.append(size['width'])
+                else:
+                    max_size_list.append(size['height'])
+                max_size_photo = max(max_size_list)
+            if size['width'] == max_size_photo or size['height'] == max_size_photo:
+                temp_dict = {}
+                temp_name = str(photo_likes) + '.jpg'
+                temp_dict['filename'] = temp_name
 
-                # запоминаем дату создания текущего фото (преобразуем дату/время из формата timestamp unix)
-                photo_date = datetime.fromtimestamp(int(photo['date'])).strftime('%Y.%m.%d_%H-%M-%S')
-
-                # итерируем размеры фото внутри одной фотографии
-                for size in sizes:
-                    if size['width'] >= size['height']:
-                        max_size_list.append(size['width'])
+                # заполняем json-файл для загрузки фото в Яндекс.Диск
+                for name in json_data_upload_yadisc:
+                    if temp_name in name.values():
+                        temp_dict['filename'] = str(photo_likes) + '_' + str(photo_date) + '.jpg'
                     else:
-                        max_size_list.append(size['height'])
-                    max_size_photo = max(max_size_list)
-                if size['width'] == max_size_photo or size['height'] == max_size_photo:
-                    temp_dict = {}
-                    temp_name = str(photo_likes) + '.jpg'
-                    temp_dict['filename'] = temp_name
+                        temp_dict['filename'] = temp_name
+                temp_dict['size'] = size['type']
+                temp_dict['url'] = size['url']
+                temp_dict['user_id'] = user_id
 
-                    # сохраняем информацию о фото в json-файл на жестком диске в требуемом по заданию виде
-                    for name in json_data_file:
-                        if temp_name in name.values():
-                            temp_dict['filename'] = str(photo_likes) + '_' + str(photo_date) + '.jpg'
-                        else:
-                            temp_dict['filename'] = temp_name
-                    temp_dict['size'] = size['type']
-                    json_data_file.append(temp_dict)
+                json_data_upload_yadisc.append(temp_dict)
+        print(f'\nНайдено {len(json_data_upload_yadisc)} фотографий\n')
 
-                    # заполняем json-файл для загрузки фото в Яндекс.Диск
-                    temp_dict_upload = temp_dict.copy()
-                    temp_dict_upload['url'] = size['url']
-                    temp_dict_upload['user_id'] = user_id
-                    json_data_upload_yadisc.append(temp_dict_upload)
-
-                json.dump(json_data_file, f, ensure_ascii=False, indent=2)
+        # запускаем метод get_photos_info_to_json()
+        self.get_photos_info_to_json(json_data_upload_yadisc)
         return json_data_upload_yadisc
 
 
@@ -145,8 +158,6 @@ class VkBackupPhotos:
         return print(message), response.json(), response_info.json()
 
     def upload(self, source_json):
-        print(f'Найдено {len(source_json)} фотографий\n')
-
         # создаем папку VK_Photos в Яндекс.Диск
         self.create_folder_yadisc()
 
